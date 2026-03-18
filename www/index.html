@@ -1,1 +1,485 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turco-Mahjong: İstanbul Seviyeleri</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: radial-gradient(circle, #1a365d 0%, #000 100%);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+        }
 
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .board {
+            position: relative;
+            width: 900px;
+            height: 600px;
+            perspective: 1000px;
+        }
+
+        .tile {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: #fdf6e3;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 
+                0 4px 0 #d9c7a1,
+                0 6px 10px rgba(0,0,0,0.5);
+            transition: all 0.2s ease-out;
+            user-select: none;
+            font-size: 2rem;
+            border: 1px solid #e6d5b3;
+        }
+
+        .tile:hover {
+            transform: translateY(-5px);
+            background: #fff;
+            z-index: 100 !important;
+        }
+
+        .tile.selected {
+            background: #ffeb3b;
+            box-shadow: 0 0 15px #ffeb3b, 0 4px 0 #c0b000;
+            transform: translateY(-8px);
+            z-index: 101 !important;
+        }
+
+        .tile.blocked {
+            filter: brightness(0.6) grayscale(0.5);
+            cursor: not-allowed;
+        }
+
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .status-msg {
+            position: fixed;
+            bottom: 30px;
+            background: rgba(0,0,0,0.8);
+            padding: 12px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid #4a5568;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            display: none;
+        }
+
+        /* Yükleniyor animasyonu için */
+        .loader {
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="ui-panel">
+        <div class="bg-blue-900/60 p-3 rounded-2xl border border-blue-400 flex flex-col items-center">
+            <span id="level-name" class="text-blue-200 text-sm font-bold">Moda Sahili</span>
+            <div class="flex gap-4 items-baseline">
+                <span class="text-xs text-blue-300">Level <span id="level-num">1</span></span>
+                <span id="tile-count" class="text-2xl font-black text-white">0</span>
+            </div>
+        </div>
+        <button onclick="getAIFact()" class="bg-purple-600 hover:bg-purple-500 px-5 py-3 rounded-xl font-bold transition shadow-lg flex items-center gap-2 border border-purple-400">
+            ✨ İkon Bilgisi
+        </button>
+        <button onclick="shuffleBoard()" class="bg-orange-600 hover:bg-orange-500 px-5 py-3 rounded-xl font-bold transition shadow-lg">Karıştır</button>
+        <button onclick="restartLevel()" class="bg-slate-700 hover:bg-slate-600 px-5 py-3 rounded-xl font-bold transition shadow-lg">Baştan</button>
+    </div>
+
+    <div id="board" class="board"></div>
+
+    <div id="status" class="status-msg"></div>
+
+    <!-- Yapay Zeka Bilgi Modalı -->
+    <div id="fact-modal" class="modal">
+        <div class="bg-indigo-950 text-white p-8 rounded-3xl text-center max-w-md shadow-2xl border-4 border-purple-500 relative">
+            <button onclick="closeFactModal()" class="absolute top-4 right-5 text-3xl font-bold text-gray-400 hover:text-white transition">&times;</button>
+            <div id="fact-icon" class="text-7xl mb-4">✨</div>
+            <h2 id="fact-title" class="text-2xl font-bold mb-4 text-purple-300">Kültürel Bilgi</h2>
+            <div id="fact-content" class="text-lg text-indigo-100 font-medium min-h-[80px] flex items-center justify-center">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win/Level Up Modal -->
+    <div id="win-modal" class="modal">
+        <div class="bg-white text-black p-10 rounded-3xl text-center max-w-sm shadow-2xl border-4 border-orange-400">
+            <div class="text-6xl mb-4">🧿</div>
+            <h2 id="modal-title" class="text-4xl font-bold mb-2 text-blue-900">Harika!</h2>
+            <div id="modal-desc" class="mb-8 text-gray-700 font-medium italic min-h-[60px] flex flex-col items-center justify-center">
+                <div class="loader mb-2" style="border-color: rgba(0,0,0,0.1); border-top-color: #3b82f6;"></div>
+                <span class="text-sm text-blue-600 animate-pulse">✨ İstanbul ruhu çağrılıyor...</span>
+            </div>
+            <button id="modal-btn" onclick="nextLevel()" class="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-full font-bold text-xl transition transform hover:scale-105 hidden">Sıradaki Durak</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- GEMINI API ENTEGRASYONU ---
+    const apiKey = ""; // Sistem tarafından otomatik olarak doldurulacaktır.
+    
+    // API çağrılarını üstel geri çekilme (exponential backoff) ile yöneten güvenli fonksiyon
+    async function callGeminiAPI(prompt, systemInstructionText) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            systemInstruction: { parts: [{ text: systemInstructionText }] }
+        };
+
+        let delay = 1000;
+        let lastError;
+
+        for (let i = 0; i < 5; i++) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) throw new Error(`HTTP Hata: ${response.status}`);
+                
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (error) {
+                lastError = error;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+        }
+        throw lastError;
+    }
+
+    // --- OYUN VERİLERİ ---
+    const TURKISH_ICONS = [
+        { char: '☕', name: 'Türk Çayı' },
+        { char: '🥨', name: 'Sokak Simidi' },
+        { char: '🐱', name: 'İstanbul Kedisi' },
+        { char: '🧿', name: 'Nazar Boncuğu' },
+        { char: '🌷', name: 'İstanbul Lalesi' },
+        { char: '⛴️', name: 'Şehir Hatları Vapuru' },
+        { char: '🍮', name: 'Türk Baklavası' },
+        { char: '🫖', name: 'Çay Demliği' },
+        { char: '🎲', name: 'Tavla' },
+        { char: '🗼', name: 'Galata Kulesi' },
+        { char: '📿', name: 'Tesbih' },
+        { char: '🥤', name: 'Milli İçecek Ayran' },
+        { char: '🍯', name: 'Türk Balı' },
+        { char: '🍦', name: 'Maraş Dondurması' }
+    ];
+
+    const LEVELS = [
+        { name: "Moda Sahili", layers: 1, rows: 4, cols: 4, spacing: 70 },
+        { name: "Kız Kulesi", layers: 1, rows: 6, cols: 6, spacing: 68 },
+        { name: "Galata Rüzgarı", layers: 2, rows: 6, cols: 8, spacing: 68 },
+        { name: "Tarihi Yarımada", layers: 3, rows: 8, cols: 10, spacing: 65 }
+    ];
+
+    let currentLevelIdx = 0;
+    let tiles = [];
+    let selectedTile = null;
+    const boardElement = document.getElementById('board');
+    const tileCountElement = document.getElementById('tile-count');
+    const levelNameElement = document.getElementById('level-name');
+    const levelNumElement = document.getElementById('level-num');
+
+    // --- YAPAY ZEKA FONKSİYONLARI ---
+
+    async function getAIFact() {
+        if (!selectedTile) {
+            showMessage("Önce bilgi almak istediğiniz bir taşı seçmelisiniz! 👆");
+            return;
+        }
+
+        const iconDef = TURKISH_ICONS.find(i => i.char === selectedTile.symbol);
+        const iconName = iconDef ? iconDef.name : "Türk Kültürü";
+
+        // Modalı göster ve yükleniyor durumuna al
+        const modal = document.getElementById('fact-modal');
+        document.getElementById('fact-icon').innerText = selectedTile.symbol;
+        document.getElementById('fact-title').innerText = iconName;
+        document.getElementById('fact-content').innerHTML = '<div class="loader"></div><p class="mt-4 text-sm opacity-70">Bilgiler toparlanıyor...</p>';
+        modal.style.display = 'flex';
+
+        const prompt = `Türk kültüründe ve özellikle İstanbul'da '${iconName}' objesinin yeri, önemi veya tarihi hakkında çok ilginç, pek bilinmeyen eğlenceli bir bilgi ver. Maksimum 2 cümle olsun. Şiirsel veya samimi bir dil kullan.`;
+        const systemInstruction = "Sen Türk kültürü uzmanı ve İstanbul aşığı eğlenceli bir rehbersin. Sadece istenen bilgiyi doğrudan ver, ekstra selamlama yapma.";
+
+        try {
+            const aiResponse = await callGeminiAPI(prompt, systemInstruction);
+            document.getElementById('fact-content').innerHTML = `<p>${aiResponse}</p>`;
+        } catch (error) {
+            document.getElementById('fact-content').innerHTML = `<p class="text-red-300">Bilgi ağına ulaşılamadı. Belki de bu sır İstanbul'un sokaklarında gizli kalmalı... 😔</p>`;
+        }
+    }
+
+    function closeFactModal() {
+        document.getElementById('fact-modal').style.display = 'none';
+        if (selectedTile) {
+            // Seçimi koru, sadece modalı kapat
+        }
+    }
+
+    async function showWinModal() {
+        const modal = document.getElementById('win-modal');
+        const title = document.getElementById('modal-title');
+        const desc = document.getElementById('modal-desc');
+        const btn = document.getElementById('modal-btn');
+
+        modal.style.display = 'flex';
+        btn.style.display = 'none'; // Butonu gizle, AI yanıtı gelince göstereceğiz
+        
+        const isGameComplete = currentLevelIdx >= LEVELS.length - 1;
+        const levelData = LEVELS[currentLevelIdx];
+
+        if (isGameComplete) {
+            title.innerText = "İstanbul'un Kralı!";
+            btn.innerText = "Baştan Başla";
+        } else {
+            title.innerText = "Harika!";
+            btn.innerText = "Sıradaki Durak";
+        }
+
+        // Yükleniyor durumunu göster
+        desc.innerHTML = `
+            <div class="loader mb-2" style="border-color: rgba(0,0,0,0.1); border-top-color: #3b82f6;"></div>
+            <span class="text-sm text-blue-600 font-bold animate-pulse">✨ Bölge ruhu çağrılıyor...</span>
+        `;
+
+        const prompt = isGameComplete 
+            ? `Oyuncu tüm İstanbul temalı Mahjong seviyelerini bitirdi. Son seviye '${levelData.name}' idi. Oyuncuyu gerçek bir İstanbul uzmanı ilan eden, şehrin tüm güzelliklerini özetleyen çok edebi ve coşkulu bir tebrik mesajı yaz. (Maksimum 2 cümle)`
+            : `Oyuncu '${levelData.name}' adlı Mahjong seviyesini başarıyla temizledi. Bu mekanın atmosferine (örneğin deniz havası, martı sesleri, tarihi doku vs.) gönderme yapan, tebrik eden edebi ve kısa bir mesaj yaz. (Maksimum 2 cümle)`;
+            
+        const systemInstruction = "Sen İstanbul sokaklarını çok iyi bilen şairane bir rehbersin. Cevapların kısa, estetik ve Türkçe olmalı.";
+
+        try {
+            const aiMessage = await callGeminiAPI(prompt, systemInstruction);
+            desc.innerHTML = `<p class="text-lg">"${aiMessage}"</p>`;
+        } catch (error) {
+            // Hata olursa standart mesaja dön
+            desc.innerHTML = `<p>${levelData.name} tamamlandı. İstanbul'un gizemlerini çözmeye devam et!</p>`;
+        } finally {
+            btn.style.display = 'inline-block'; // Butonu görünür yap
+        }
+    }
+
+    // --- OYUN MOTORU ---
+
+    function generateLayout(levelIdx) {
+        const config = LEVELS[levelIdx];
+        const layout = [];
+        
+        for(let z = 0; z < config.layers; z++) {
+            let rows = config.rows - (z * 2);
+            let cols = config.cols - (z * 2);
+            if (rows < 2 || cols < 2) break;
+
+            const offsetX = (900 - (cols * config.spacing)) / 2 + (z * 10);
+            const offsetY = (600 - (rows * 85)) / 2 + (z * 10);
+            
+            for(let r = 0; r < rows; r++) {
+                for(let c = 0; c < cols; c++) {
+                    layout.push({
+                        x: c * config.spacing + offsetX,
+                        y: r * 85 + offsetY,
+                        z: z,
+                        row: r,
+                        col: c
+                    });
+                }
+            }
+        }
+        
+        let totalNeeded = layout.length;
+        if (totalNeeded % 2 !== 0) totalNeeded -= 1;
+
+        const symbols = [];
+        for(let i = 0; i < totalNeeded / 2; i++) {
+            const icon = TURKISH_ICONS[Math.floor(Math.random() * TURKISH_ICONS.length)];
+            symbols.push(icon.char, icon.char);
+        }
+        
+        symbols.sort(() => Math.random() - 0.5);
+
+        return layout.slice(0, totalNeeded).map((pos, i) => ({
+            ...pos,
+            id: i,
+            symbol: symbols[i],
+            removed: false
+        }));
+    }
+
+    function isTileFree(tile, allTiles) {
+        const activeTiles = allTiles.filter(t => !t.removed);
+        
+        const hasTileAbove = activeTiles.some(t => 
+            t.z === tile.z + 1 && 
+            Math.abs(t.x - tile.x) < 40 && 
+            Math.abs(t.y - tile.y) < 50
+        );
+        if (hasTileAbove) return false;
+
+        const hasLeft = activeTiles.some(t => 
+            t.z === tile.z && 
+            Math.abs(t.y - tile.y) < 10 && 
+            t.x < tile.x && t.x > tile.x - 80
+        );
+        const hasRight = activeTiles.some(t => 
+            t.z === tile.z && 
+            Math.abs(t.y - tile.y) < 10 && 
+            t.x > tile.x && t.x < tile.x + 80
+        );
+
+        return !hasLeft || !hasRight;
+    }
+
+    function renderBoard() {
+        boardElement.innerHTML = '';
+        const activeTiles = tiles.filter(t => !t.removed);
+        tileCountElement.innerText = activeTiles.length;
+
+        if (activeTiles.length === 0 && tiles.length > 0) {
+            showWinModal();
+            return;
+        }
+
+        tiles.forEach(tile => {
+            if (tile.removed) return;
+
+            const el = document.createElement('div');
+            el.className = 'tile';
+            const free = isTileFree(tile, tiles);
+            if (!free) el.classList.add('blocked');
+            if (selectedTile && selectedTile.id === tile.id) el.classList.add('selected');
+
+            el.style.left = `${tile.x}px`;
+            el.style.top = `${tile.y}px`;
+            el.style.zIndex = tile.z * 10;
+            el.innerText = tile.symbol;
+
+            el.onclick = () => handleTileClick(tile, free);
+            boardElement.appendChild(el);
+        });
+    }
+
+    function handleTileClick(tile, free) {
+        if (!free) {
+            showMessage("Bu taş sıkışmış! Kenarlarını açmalısın.");
+            return;
+        }
+
+        if (selectedTile) {
+            if (selectedTile.id === tile.id) {
+                selectedTile = null;
+            } else if (selectedTile.symbol === tile.symbol) {
+                tile.removed = true;
+                selectedTile.removed = true;
+                selectedTile = null;
+                showMessage("Eşleşti! 🧿");
+            } else {
+                selectedTile = tile;
+            }
+        } else {
+            selectedTile = tile;
+        }
+        renderBoard();
+    }
+
+    function nextLevel() {
+        if (currentLevelIdx < LEVELS.length - 1) {
+            currentLevelIdx++;
+        } else {
+            currentLevelIdx = 0;
+        }
+        startLevel(currentLevelIdx);
+    }
+
+    function startLevel(idx) {
+        document.getElementById('win-modal').style.display = 'none';
+        levelNameElement.innerText = LEVELS[idx].name;
+        levelNumElement.innerText = idx + 1;
+        tiles = generateLayout(idx);
+        selectedTile = null;
+        renderBoard();
+    }
+
+    function restartLevel() {
+        startLevel(currentLevelIdx);
+        showMessage("Seviye baştan başlıyor.");
+    }
+
+    function shuffleBoard() {
+        const activeTiles = tiles.filter(t => !t.removed);
+        if(activeTiles.length === 0) return;
+        
+        const symbols = activeTiles.map(t => t.symbol).sort(() => Math.random() - 0.5);
+        let symbolIdx = 0;
+        tiles.forEach(t => {
+            if(!t.removed) t.symbol = symbols[symbolIdx++];
+        });
+        selectedTile = null;
+        renderBoard();
+        showMessage("Taşlar karıştırıldı!");
+    }
+
+    function showMessage(msg) {
+        const s = document.getElementById('status');
+        s.innerText = msg;
+        s.style.opacity = '1';
+        setTimeout(() => s.style.opacity = '0', 2000);
+    }
+
+    window.onload = () => startLevel(0);
+</script>
+
+</body>
+</html>
