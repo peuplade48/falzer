@@ -111,17 +111,6 @@
             z-index: 3000;
             display: none;
         }
-
-        .loader {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #6366f1;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -129,13 +118,13 @@
 <div id="game-viewport">
     <div class="ui-panel">
         <div class="bg-blue-900/80 p-2 rounded-xl border border-blue-400/50 flex flex-col items-center min-w-[100px]">
-            <span id="level-name" class="text-blue-200 text-[10px] font-bold uppercase tracking-wider">Yükleniyor...</span>
+            <span id="level-name" class="text-blue-200 text-[10px] font-bold uppercase tracking-wider">Başlıyor...</span>
             <div class="flex gap-2 items-baseline">
                 <span id="tile-count" class="text-lg font-black text-white">0</span>
                 <span class="text-[9px] text-blue-300">TAŞ KALDI</span>
             </div>
         </div>
-        <button onclick="getAIFact()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-2 rounded-lg font-bold transition shadow-lg flex items-center gap-1 border border-indigo-400 text-xs">
+        <button onclick="getOfflineFact()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-2 rounded-lg font-bold transition shadow-lg flex items-center gap-1 border border-indigo-400 text-xs">
             ✨ Bilgi
         </button>
         <button onclick="shuffleBoard()" class="bg-orange-600 hover:bg-orange-500 px-3 py-2 rounded-lg font-bold transition shadow-lg text-xs">Karıştır</button>
@@ -147,7 +136,7 @@
 
 <div id="status" class="status-msg"></div>
 
-<!-- Bilgi Modalı -->
+<!-- Çevrimdışı Bilgi Modalı -->
 <div id="fact-modal" class="modal">
     <div class="bg-slate-900 text-white p-6 rounded-2xl text-center max-w-[85%] shadow-2xl border border-indigo-500/50 relative">
         <button onclick="closeFactModal()" class="absolute top-2 right-4 text-2xl font-bold text-gray-500 hover:text-white">&times;</button>
@@ -161,54 +150,43 @@
 <div id="win-modal" class="modal">
     <div class="bg-white text-black p-8 rounded-3xl text-center max-w-[80%] shadow-2xl border-4 border-orange-400">
         <div class="text-5xl mb-3">🧿</div>
-        <h2 id="modal-title" class="text-2xl font-bold mb-2 text-blue-900">Harika!</h2>
+        <h2 id="modal-title" class="text-2xl font-bold mb-2 text-blue-900">Tebrikler!</h2>
         <div id="modal-desc" class="mb-6 text-gray-600 text-sm italic min-h-[50px] flex flex-col items-center justify-center"></div>
         <button id="modal-btn" onclick="nextLevel()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-bold transition">Devam Et</button>
     </div>
 </div>
 
 <script>
-    const apiKey = ""; 
-
-    // --- HIZLI YANIT İÇİN OPTİMİZE EDİLMİŞ API ÇAĞRISI ---
-    async function callGeminiAPI(prompt, systemInstructionText, timeout = 5000) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
-
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: { parts: [{ text: systemInstructionText }] },
-            generationConfig: { maxOutputTokens: 50, temperature: 0.7 } // Kısa ve hızlı yanıt için
-        };
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
-            clearTimeout(timer);
-            if (!response.ok) throw new Error("API Hatası");
-            const data = await response.json();
-            return data.candidates[0].content.parts[0].text;
-        } catch (e) {
-            return null; // Zaman aşımı veya hata durumunda null dön
-        }
-    }
+    // --- GENİŞ ÇEVRİMDIŞI VERİ HAVUZU ---
+    const OFFLINE_DATA = {
+        facts: {
+            '☕': ["İnce belli bardakta tavşan kanı çay, İstanbul sabahlarının ruhudur.", "Demli bir çay ve Boğaz manzarası, dünyanın en ucuz lüksüdür.", "Çay, İstanbul'da sadece bir içecek değil, bir dostluk bahanesidir."],
+            '🥨': ["Çıtır çıtır simit ve yanına üçgen peynir; işte gerçek İstanbul gurmesi!", "Vapurda martılarla paylaşılan bir simit, İstanbul'un en eski geleneğidir.", "Sokak simitçisinin sesi, İstanbul'un en tanıdık şarkısıdır."],
+            '🐱': ["İstanbul'un gerçek sahipleri kediler, her köşebaşında sizi selamlar.", "Ayasofya'dan Moda'ya, her mahallenin ünlü bir kedi muhtarı vardır.", "İstanbul kedileri, şehrin kaosu içinde huzurun temsilcileridir."],
+            '🧿': ["Mavi bir nazar boncuğu, kötülükleri savuşturan en eski Anadolu tılsımıdır.", "Bereketi ve şansı simgeleyen bu mavi göz, asırlardır evlerimizin baş köşesindedir.", "Nazar değmesin diye takılan bu boncuk, bir kültür mirasıdır."],
+            '🌷': ["Asaletin simgesi lale, Osmanlı'dan günümüze İstanbul'un zarif çiçeğidir.", "Nisan ayı geldiğinde Emirgan Korusu bir lale denizine dönüşür.", "Lale, sadece bir çiçek değil, bir devrin ve bir sanatın adıdır."],
+            '⛴️': ["Kıtalar arası yolculuğun en keyifli yolu, bir vapur güvertesidir.", "Vapurun arkasında bıraktığı beyaz köpükler, İstanbul'un en güzel izidir.", "Siren sesi duyulduğunda, İstanbul'un kalbi vapurla birlikte atar."],
+            '🍮': ["Kırk kat yufka ve bol fıstık; baklava damakların en büyük bayramıdır.", "Gaziantep'ten İstanbul'a uzanan bu lezzet yolculuğu, tatlı bir mirastır.", "Şerbetin hamurla dansı olan baklava, Türk mutfağının baş tacıdır."],
+            '🎲': ["Tavla, İstanbul kahvehanelerinde çekişmeli sohbetlerin ortağıdır.", "Düşeş geldiğinde atılan o sevinç çığlığı, oyunun ruhudur.", "Tavla bilmek, İstanbul kültürünün yazılı olmayan kurallarından biridir."],
+            '🗼': ["Galata Kulesi, yüzyıllardır aşıklara İstanbul'un masallarını fısıldar.", "Hezarfen'in kanat çırptığı bu kule, özgürlüğün simgesidir.", "Galata'nın zirvesinden bakınca, tüm İstanbul ayaklarınızın altına serilir."],
+            '🥤': ["Bol köpüklü, buz gibi bir ayran; her yemeğin en sadık eşlikçisidir.", "Anadolu'nun geleneksel ferahlığı ayran, sağlığın ve doğallığın sembolüdür.", "Milli içeceğimiz ayran, yaz sıcaklarının en serin sığınağıdır."]
+        },
+        congrats: [
+            "İstanbul'un fatihi gibi ilerliyorsun! Harika iş!",
+            "Moda'dan başladın, Galata'ya kadar estin geçtin!",
+            "Taşları tıpkı bir usta gibi birer birer temizledin.",
+            "Şehrin yedi tepesi de senin başarını kutluyor!",
+            "Hızın ve dikkatin hayranlık uyandırıcı, tebrikler!",
+            "Boğaz'ın serinliği gibi ferahlatıcı bir galibiyet!"
+        ]
+    };
 
     const TURKISH_ICONS = [
-        { char: '☕', name: 'Türk Çayı', fallback: "İnce belli bardakta tavşan kanı çay, İstanbul sabahlarının vazgeçilmezidir." },
-        { char: '🥨', name: 'Simit', fallback: "Çıtır çıtır simit ve yanına bir parça peynir; işte gerçek bir İstanbul kahvaltısı." },
-        { char: '🐱', name: 'İstanbul Kedisi', fallback: "İstanbul'un gerçek sahipleri olan kediler, her sokak başında sizi bekler." },
-        { char: '🧿', name: 'Nazar Boncuğu', fallback: "Mavi gözlü bu tılsım, asırlardır Anadolu'da kötü enerjiden korunmak için kullanılır." },
-        { char: '🌷', name: 'Lale', fallback: "Asaletin simgesi lale, bahar geldiğinde İstanbul parklarını renk cümbüşüne çevirir." },
-        { char: '⛴️', name: 'Vapur', fallback: "Martıların eşliğinde kıtalar arası yolculuk, sadece İstanbul'a has bir keyiftir." },
-        { char: '🍮', name: 'Baklava', fallback: "İncecik hamur ve bol fıstık; Türk mutfağının dünyaya armağanıdır." },
-        { char: '🎲', name: 'Tavla', fallback: "Mahalle kahvelerinin vazgeçilmezi olan tavla, sadece bir oyun değil, bir sohbettir." },
-        { char: '🗼', name: 'Galata Kulesi', fallback: "Şehrin en eski bekçisi Galata, yüzyıllardır aşıklara İstanbul'u izletir." },
-        { char: '🥤', name: 'Ayran', fallback: "Bol köpüklü buz gibi bir ayran, her yemeğin en sadık dostudur." }
+        { char: '☕', name: 'Türk Çayı' }, { char: '🥨', name: 'Simit' },
+        { char: '🐱', name: 'İstanbul Kedisi' }, { char: '🧿', name: 'Nazar Boncuğu' },
+        { char: '🌷', name: 'Lale' }, { char: '⛴️', name: 'Vapur' },
+        { char: '🍮', name: 'Baklava' }, { char: '🎲', name: 'Tavla' },
+        { char: '🗼', name: 'Galata Kulesi' }, { char: '🥤', name: 'Ayran' }
     ];
 
     const LEVELS = [
@@ -229,39 +207,27 @@
     }
     window.addEventListener('resize', updateScale);
 
-    async function getAIFact() {
+    function getOfflineFact() {
         if (!selectedTile) { showMessage("Bir taş seçin! 👆"); return; }
-        const icon = TURKISH_ICONS.find(i => i.char === selectedTile.symbol) || TURKISH_ICONS[0];
+        const iconInfo = TURKISH_ICONS.find(i => i.char === selectedTile.symbol);
+        const factList = OFFLINE_DATA.facts[selectedTile.symbol] || ["İstanbul'un her köşesi ayrı bir hikayedir."];
+        const randomFact = factList[Math.floor(Math.random() * factList.length)];
         
-        const modal = document.getElementById('fact-modal');
-        const content = document.getElementById('fact-content');
-        modal.style.display = 'flex';
+        document.getElementById('fact-modal').style.display = 'flex';
         document.getElementById('fact-icon').innerText = selectedTile.symbol;
-        document.getElementById('fact-title').innerText = icon.name;
-        content.innerHTML = '<div class="loader"></div>';
-
-        // Beklerken bir yandan istek at, bir yandan fallback hazır tut
-        const resp = await callGeminiAPI(`${icon.name} hakkında İstanbul temalı çok kısa bilgi ver.`, "Hızlı ve şairane ol.");
-        content.innerHTML = `<p>${resp || icon.fallback}</p>`;
+        document.getElementById('fact-title').innerText = iconInfo ? iconInfo.name : "İstanbul Sırrı";
+        document.getElementById('fact-content').innerHTML = `<p>${randomFact}</p>`;
     }
 
     function closeFactModal() { document.getElementById('fact-modal').style.display = 'none'; }
 
-    async function showWinModal() {
+    function showWinModal() {
         const modal = document.getElementById('win-modal');
         const desc = document.getElementById('modal-desc');
-        const btn = document.getElementById('modal-btn');
+        const randomCongrats = OFFLINE_DATA.congrats[Math.floor(Math.random() * OFFLINE_DATA.congrats.length)];
+        
         modal.style.display = 'flex';
-        btn.classList.add('opacity-50', 'pointer-events-none');
-        desc.innerHTML = '<div class="flex flex-col items-center"><div class="loader mb-2"></div><span class="text-[10px] text-blue-500 animate-pulse">İstanbul Ruhu Çağrılıyor...</span></div>';
-
-        const isLast = currentLevelIdx >= LEVELS.length - 1;
-        const prompt = isLast ? "Oyun bitti tebrik mesajı yaz." : `${LEVELS[currentLevelIdx].name} bitti kutlama yaz.`;
-        
-        const resp = await callGeminiAPI(prompt, "Sadece 1 kısa cümlelik tebrik yaz.");
-        desc.innerHTML = `<p>"${resp || (isLast ? "İstanbul'un fatihi oldun!" : "Harika bir duraktı, yolculuğa devam!")}"</p>`;
-        
-        btn.classList.remove('opacity-50', 'pointer-events-none');
+        desc.innerHTML = `<p>"${randomCongrats}"</p>`;
     }
 
     function generateLayout(idx) {
