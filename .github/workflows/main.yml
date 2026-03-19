@@ -1,0 +1,26 @@
+name: Android APK Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buildozer ile APK Oluştur
+        uses: ArtemSerebrenninkov/buildozer-action@v1
+        with:
+          buildozer_version: master
+          # Bu adım yaklaşık 15-20 dakika sürer
+          command: buildozer android debug
+          repository_root: .
+
+      - name: APK Dosyasını Yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurcoDefense-Debug-APK
+          path: bin/*.apk
