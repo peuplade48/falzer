@@ -6,11 +6,6 @@
     <title>Turco-Mahjong: İstanbul Seviyeleri</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --game-width: 900;
-            --game-height: 506.25;
-        }
-
         body {
             background: radial-gradient(circle, #1a365d 0%, #000 100%);
             margin: 0;
@@ -20,85 +15,68 @@
             color: white;
             touch-action: none;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
             height: 100vh;
             width: 100vw;
         }
 
-        #game-viewport {
+        #game-container {
+            flex: 1;
             position: relative;
-            width: 900px;
-            height: 506px;
+            width: 100%;
+            overflow: hidden;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: transform 0.3s ease-out;
-            transform-origin: center;
         }
 
         .board {
             position: relative;
-            width: 900px;
-            height: 400px;
+            /* Mobil için varsayılan genişlik, JS ile güncellenecek */
+            width: 100%; 
+            height: 100%;
             perspective: 1000px;
-            margin-top: 60px;
         }
 
         .tile {
             position: absolute;
-            width: 50px;
-            height: 68px;
+            /* Taş boyutları büyütüldü: 60x82 */
+            width: 60px;
+            height: 82px;
             background: #fdf6e3;
-            border-radius: 4px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 3px 0 #d9c7a1, 0 5px 8px rgba(0,0,0,0.5);
-            transition: all 0.1s ease-out;
+            box-shadow: 0 4px 0 #d9c7a1, 0 8px 12px rgba(0,0,0,0.6);
+            transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
             user-select: none;
-            font-size: 1.8rem;
+            font-size: 2.2rem;
             border: 1px solid #e6d5b3;
             -webkit-tap-highlight-color: transparent;
         }
 
         .tile.selected {
             background: #ffeb3b;
-            box-shadow: 0 0 15px #ffeb3b, 0 3px 0 #c0b000;
-            transform: translateY(-5px);
-            z-index: 1000 !important;
+            box-shadow: 0 0 20px #ffeb3b, 0 4px 0 #c0b000;
+            transform: translateY(-8px) scale(1.05);
+            z-index: 2000 !important;
         }
 
         .tile.blocked {
-            filter: brightness(0.5) grayscale(0.7);
+            filter: brightness(0.4) grayscale(0.8);
             cursor: not-allowed;
         }
 
-        .ui-panel {
-            position: absolute;
-            top: -20px;
+        .header-panel {
+            padding: env(safe-area-inset-top) 10px 10px 10px;
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            z-index: 100;
-            width: 100%;
-        }
-
-        .status-msg {
-            position: fixed;
-            bottom: 20px;
-            background: rgba(0,0,0,0.85);
-            padding: 10px 20px;
-            border-radius: 20px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            border: 1px solid #4a5568;
-            font-size: 0.9rem;
-            z-index: 2000;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
         }
 
         .modal {
@@ -108,56 +86,77 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 3000;
+            z-index: 5000;
             display: none;
+            padding: 20px;
+        }
+
+        .status-msg {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            padding: 12px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid #4a5568;
+            z-index: 4000;
         }
     </style>
 </head>
 <body>
 
-<div id="game-viewport">
-    <div class="ui-panel">
-        <div class="bg-blue-900/80 p-2 rounded-xl border border-blue-400/50 flex flex-col items-center min-w-[100px]">
-            <span id="level-name" class="text-blue-200 text-[10px] font-bold uppercase tracking-wider">Başlıyor...</span>
-            <div class="flex gap-2 items-baseline">
-                <span id="tile-count" class="text-lg font-black text-white">0</span>
-                <span class="text-[9px] text-blue-300">TAŞ KALDI</span>
-            </div>
+<div class="header-panel">
+    <div class="flex justify-between items-center w-full">
+        <div class="flex flex-col">
+            <span id="level-name" class="text-blue-400 text-xs font-bold uppercase tracking-widest">Yükleniyor</span>
+            <span class="text-white text-lg font-black"><span id="tile-count">0</span> <span class="text-xs font-normal text-gray-400">TAŞ</span></span>
         </div>
-        <button onclick="getOfflineFact()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-2 rounded-lg font-bold transition shadow-lg flex items-center gap-1 border border-indigo-400 text-xs">
-            ✨ Bilgi
-        </button>
-        <button onclick="shuffleBoard()" class="bg-orange-600 hover:bg-orange-500 px-3 py-2 rounded-lg font-bold transition shadow-lg text-xs">Karıştır</button>
-        <button onclick="restartLevel()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg font-bold transition shadow-lg text-xs">Baştan</button>
+        <div class="flex gap-2">
+            <button onclick="shuffleBoard()" class="bg-orange-600 p-2 rounded-lg shadow-lg active:scale-95 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" /></svg>
+            </button>
+            <button onclick="restartLevel()" class="bg-slate-700 p-2 rounded-lg shadow-lg active:scale-95 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>
+            </button>
+        </div>
     </div>
+    <button onclick="getOfflineFact()" class="w-full bg-indigo-600 py-2 rounded-xl font-bold text-sm shadow-md active:bg-indigo-500 transition border border-indigo-400/30">
+        ✨ Seçili Taş Hakkında Bilgi
+    </button>
+</div>
 
+<div id="game-container">
     <div id="board" class="board"></div>
 </div>
 
-<div id="status" class="status-msg"></div>
+<div id="status" class="status-msg text-white text-sm font-medium"></div>
 
-<!-- Çevrimdışı Bilgi Modalı -->
+<!-- Bilgi Modalı -->
 <div id="fact-modal" class="modal">
-    <div class="bg-slate-900 text-white p-6 rounded-2xl text-center max-w-[85%] shadow-2xl border border-indigo-500/50 relative">
-        <button onclick="closeFactModal()" class="absolute top-2 right-4 text-2xl font-bold text-gray-500 hover:text-white">&times;</button>
-        <div id="fact-icon" class="text-5xl mb-3">✨</div>
-        <h2 id="fact-title" class="text-lg font-bold mb-2 text-indigo-300">İstanbul Sırları</h2>
-        <div id="fact-content" class="text-sm text-slate-200 font-medium min-h-[60px] flex items-center justify-center"></div>
+    <div class="bg-slate-900 text-white p-6 rounded-3xl text-center w-full max-w-sm shadow-2xl border border-indigo-500/30 relative">
+        <button onclick="closeFactModal()" class="absolute top-3 right-5 text-3xl font-light text-gray-500">&times;</button>
+        <div id="fact-icon" class="text-6xl mb-4">✨</div>
+        <h2 id="fact-title" class="text-xl font-bold mb-3 text-indigo-300">İstanbul Sırları</h2>
+        <div id="fact-content" class="text-base text-slate-300 leading-relaxed min-h-[80px] px-2"></div>
+        <button onclick="closeFactModal()" class="mt-6 w-full bg-slate-800 py-3 rounded-2xl font-bold">Anladım</button>
     </div>
 </div>
 
 <!-- Kazanç Modalı -->
 <div id="win-modal" class="modal">
-    <div class="bg-white text-black p-8 rounded-3xl text-center max-w-[80%] shadow-2xl border-4 border-orange-400">
-        <div class="text-5xl mb-3">🧿</div>
-        <h2 id="modal-title" class="text-2xl font-bold mb-2 text-blue-900">Tebrikler!</h2>
-        <div id="modal-desc" class="mb-6 text-gray-600 text-sm italic min-h-[50px] flex flex-col items-center justify-center"></div>
-        <button id="modal-btn" onclick="nextLevel()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-bold transition">Devam Et</button>
+    <div class="bg-white text-black p-8 rounded-[40px] text-center w-full max-w-sm shadow-2xl border-t-8 border-orange-400">
+        <div class="text-6xl mb-4">🧿</div>
+        <h2 class="text-3xl font-black mb-2 text-blue-900">Harika!</h2>
+        <div id="modal-desc" class="mb-8 text-gray-600 text-lg italic px-4"></div>
+        <button onclick="nextLevel()" class="w-full bg-blue-600 text-white py-4 rounded-3xl text-xl font-bold shadow-xl active:scale-95 transition">Sonraki Durak</button>
     </div>
 </div>
 
 <script>
-    // --- GENİŞ ÇEVRİMDIŞI VERİ HAVUZU ---
     const OFFLINE_DATA = {
         facts: {
             '☕': ["İnce belli bardakta tavşan kanı çay, İstanbul sabahlarının ruhudur.", "Demli bir çay ve Boğaz manzarası, dünyanın en ucuz lüksüdür.", "Çay, İstanbul'da sadece bir içecek değil, bir dostluk bahanesidir."],
@@ -172,12 +171,12 @@
             '🥤': ["Bol köpüklü, buz gibi bir ayran; her yemeğin en sadık eşlikçisidir.", "Anadolu'nun geleneksel ferahlığı ayran, sağlığın ve doğallığın sembolüdür.", "Milli içeceğimiz ayran, yaz sıcaklarının en serin sığınağıdır."]
         },
         congrats: [
-            "İstanbul'un fatihi gibi ilerliyorsun! Harika iş!",
-            "Moda'dan başladın, Galata'ya kadar estin geçtin!",
-            "Taşları tıpkı bir usta gibi birer birer temizledin.",
-            "Şehrin yedi tepesi de senin başarını kutluyor!",
-            "Hızın ve dikkatin hayranlık uyandırıcı, tebrikler!",
-            "Boğaz'ın serinliği gibi ferahlatıcı bir galibiyet!"
+            "İstanbul'un fatihi gibi ilerliyorsun!",
+            "Moda'dan başladın, şehri fethettin!",
+            "Tam bir usta işi temizlik!",
+            "Yedi Tepe seninle gurur duyuyor!",
+            "Boğaz havası sana iyi geldi!",
+            "Hızın parmak ısırtıyor!"
         ]
     };
 
@@ -190,76 +189,73 @@
     ];
 
     const LEVELS = [
-        { name: "Moda Sahili", layers: 1, rows: 4, cols: 6, spacingX: 60, spacingY: 75 },
-        { name: "Kız Kulesi", layers: 1, rows: 5, cols: 8, spacingX: 55, spacingY: 72 },
-        { name: "Galata Rüzgarı", layers: 2, rows: 4, cols: 7, spacingX: 58, spacingY: 74 },
-        { name: "Tarihi Yarımada", layers: 3, rows: 4, cols: 8, spacingX: 55, spacingY: 70 }
+        { name: "Moda İskelesi", layers: 1, rows: 4, cols: 5 },
+        { name: "Kız Kulesi", layers: 1, rows: 6, cols: 5 },
+        { name: "Galata Rüzgarı", layers: 2, rows: 5, cols: 5 },
+        { name: "Mısır Çarşısı", layers: 3, rows: 5, cols: 5 }
     ];
 
     let currentLevelIdx = 0;
     let tiles = [];
     let selectedTile = null;
 
-    function updateScale() {
-        const viewport = document.getElementById('game-viewport');
-        const finalScale = Math.min(window.innerWidth / 900, window.innerHeight / 506) * 0.95;
-        viewport.style.transform = `scale(${finalScale})`;
-    }
-    window.addEventListener('resize', updateScale);
-
-    function getOfflineFact() {
-        if (!selectedTile) { showMessage("Bir taş seçin! 👆"); return; }
-        const iconInfo = TURKISH_ICONS.find(i => i.char === selectedTile.symbol);
-        const factList = OFFLINE_DATA.facts[selectedTile.symbol] || ["İstanbul'un her köşesi ayrı bir hikayedir."];
-        const randomFact = factList[Math.floor(Math.random() * factList.length)];
-        
-        document.getElementById('fact-modal').style.display = 'flex';
-        document.getElementById('fact-icon').innerText = selectedTile.symbol;
-        document.getElementById('fact-title').innerText = iconInfo ? iconInfo.name : "İstanbul Sırrı";
-        document.getElementById('fact-content').innerHTML = `<p>${randomFact}</p>`;
-    }
-
-    function closeFactModal() { document.getElementById('fact-modal').style.display = 'none'; }
-
-    function showWinModal() {
-        const modal = document.getElementById('win-modal');
-        const desc = document.getElementById('modal-desc');
-        const randomCongrats = OFFLINE_DATA.congrats[Math.floor(Math.random() * OFFLINE_DATA.congrats.length)];
-        
-        modal.style.display = 'flex';
-        desc.innerHTML = `<p>"${randomCongrats}"</p>`;
-    }
-
+    // Mobil Uyumlu Koordinat Hesaplama
     function generateLayout(idx) {
         const config = LEVELS[idx];
         const layout = [];
+        const boardEl = document.getElementById('board');
+        const bw = boardEl.clientWidth;
+        const bh = boardEl.clientHeight;
+        
+        const tileW = 60;
+        const tileH = 82;
+        const gapX = 64; // Taş genişliği + küçük boşluk
+        const gapY = 88;
+
         for(let z = 0; z < config.layers; z++) {
-            let r_max = config.rows - z;
-            let c_max = config.cols - z;
-            const ox = (900 - (c_max * config.spacingX)) / 2;
-            const oy = (400 - (r_max * config.spacingY)) / 2 + 30;
-            for(let r = 0; r < r_max; r++) {
-                for(let c = 0; c < c_max; c++) {
-                    layout.push({ x: c * config.spacingX + ox, y: r * config.spacingY + oy, z: z });
+            const rows = config.rows;
+            const cols = config.cols;
+            
+            // Merkeze hizalama
+            const startX = (bw - (cols * gapX)) / 2 + (z * 2);
+            const startY = (bh - (rows * gapY)) / 2 + (z * 2);
+
+            for(let r = 0; r < rows; r++) {
+                for(let c = 0; c < cols; c++) {
+                    // Mobil dikey görünümde çok fazla taş üst üste binmemesi için her katmanda %20 azaltma
+                    if (z > 0 && Math.random() > 0.7) continue; 
+                    
+                    layout.push({ 
+                        x: startX + (c * gapX), 
+                        y: startY + (r * gapY), 
+                        z: z 
+                    });
                 }
             }
         }
+
         if (layout.length % 2 !== 0) layout.pop();
+        
         const symbols = [];
         for(let i = 0; i < layout.length / 2; i++) {
             const s = TURKISH_ICONS[Math.floor(Math.random()*TURKISH_ICONS.length)].char;
             symbols.push(s, s);
         }
         symbols.sort(() => Math.random() - 0.5);
+
         return layout.map((p, i) => ({ ...p, id: i, symbol: symbols[i], removed: false }));
     }
 
     function isFree(tile, all) {
         const active = all.filter(t => !t.removed && t.id !== tile.id);
+        // Üstünde taş var mı?
         const above = active.some(t => t.z > tile.z && Math.abs(t.x-tile.x) < 40 && Math.abs(t.y-tile.y) < 50);
         if (above) return false;
-        const left = active.some(t => t.z === tile.z && Math.abs(t.y-tile.y) < 10 && t.x < tile.x && t.x > tile.x - 55);
-        const right = active.some(t => t.z === tile.z && Math.abs(t.y-tile.y) < 10 && t.x > tile.x && t.x < tile.x + 55);
+        
+        // Yanlar açık mı? (Mahjong kuralı: Sağ veya sol boş olmalı)
+        const left = active.some(t => t.z === tile.z && Math.abs(t.y-tile.y) < 10 && t.x < tile.x && t.x > tile.x - 65);
+        const right = active.some(t => t.z === tile.z && Math.abs(t.y-tile.y) < 10 && t.x > tile.x && t.x < tile.x + 65);
+        
         return !left || !right;
     }
 
@@ -268,51 +264,113 @@
         board.innerHTML = '';
         const active = tiles.filter(t => !t.removed);
         document.getElementById('tile-count').innerText = active.length;
-        if (active.length === 0 && tiles.length > 0) { showWinModal(); return; }
+        
+        if (active.length === 0 && tiles.length > 0) {
+            showWinModal();
+            return;
+        }
 
-        tiles.forEach(t => {
+        // Z-index'e göre sırala (üsttekiler alttakilerin üstüne binmesi için render sırası)
+        const sortedTiles = [...tiles].sort((a, b) => a.z - b.z);
+
+        sortedTiles.forEach(t => {
             if (t.removed) return;
             const el = document.createElement('div');
-            el.className = `tile ${isFree(t, tiles) ? '' : 'blocked'} ${selectedTile?.id === t.id ? 'selected' : ''}`;
-            el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; el.style.zIndex = t.z * 10;
+            const free = isFree(t, tiles);
+            el.className = `tile ${free ? '' : 'blocked'} ${selectedTile?.id === t.id ? 'selected' : ''}`;
+            el.style.left = t.x + 'px';
+            el.style.top = t.y + 'px';
+            el.style.zIndex = t.z * 100 + (t.y); // Y koordinatı derinlik hissi verir
+            
             el.innerText = t.symbol;
-            el.onclick = () => {
-                if (!isFree(t, tiles)) return;
+            
+            el.onclick = (e) => {
+                e.preventDefault();
+                if (!free) {
+                    showMessage("Bu taş kilitli! 🔒");
+                    return;
+                }
+                
                 if (selectedTile && selectedTile.id !== t.id && selectedTile.symbol === t.symbol) {
-                    t.removed = true; selectedTile.removed = true; selectedTile = null;
+                    // Eşleşme
+                    t.removed = true;
+                    selectedTile.removed = true;
+                    selectedTile = null;
+                    render();
                 } else {
                     selectedTile = (selectedTile?.id === t.id) ? null : t;
+                    render();
                 }
-                render();
             };
             board.appendChild(el);
         });
+    }
+
+    function getOfflineFact() {
+        if (!selectedTile) {
+            showMessage("Önce bir taş seçmelisin! 👆");
+            return;
+        }
+        const iconInfo = TURKISH_ICONS.find(i => i.char === selectedTile.symbol);
+        const factList = OFFLINE_DATA.facts[selectedTile.symbol] || ["İstanbul'un gizemleri saymakla bitmez."];
+        const randomFact = factList[Math.floor(Math.random() * factList.length)];
+        
+        document.getElementById('fact-modal').style.display = 'flex';
+        document.getElementById('fact-icon').innerText = selectedTile.symbol;
+        document.getElementById('fact-title').innerText = iconInfo ? iconInfo.name : "İstanbul Sırrı";
+        document.getElementById('fact-content').innerText = randomFact;
+    }
+
+    function closeFactModal() { document.getElementById('fact-modal').style.display = 'none'; }
+
+    function showWinModal() {
+        const modal = document.getElementById('win-modal');
+        const desc = document.getElementById('modal-desc');
+        const randomCongrats = OFFLINE_DATA.congrats[Math.floor(Math.random() * OFFLINE_DATA.congrats.length)];
+        modal.style.display = 'flex';
+        desc.innerText = randomCongrats;
     }
 
     function startLevel(i) {
         currentLevelIdx = i;
         document.getElementById('win-modal').style.display = 'none';
         document.getElementById('level-name').innerText = LEVELS[i].name;
+        
+        // Tahta boyutlarını temizle ve yeniden oluştur
         tiles = generateLayout(i);
         selectedTile = null;
         render();
-        updateScale();
     }
 
-    function nextLevel() { startLevel((currentLevelIdx + 1) % LEVELS.length); }
-    function restartLevel() { startLevel(currentLevelIdx); }
+    function nextLevel() {
+        startLevel((currentLevelIdx + 1) % LEVELS.length);
+    }
+
+    function restartLevel() {
+        startLevel(currentLevelIdx);
+    }
+
     function shuffleBoard() {
         const active = tiles.filter(t => !t.removed);
         const syms = active.map(t => t.symbol).sort(() => Math.random() - 0.5);
         let sIdx = 0;
         tiles.forEach(t => { if(!t.removed) t.symbol = syms[sIdx++]; });
-        selectedTile = null; render();
+        selectedTile = null;
+        render();
+        showMessage("Taşlar karıştırıldı! 🌀");
     }
 
     function showMessage(m) {
-        const s = document.getElementById('status'); s.innerText = m; s.style.opacity = 1;
+        const s = document.getElementById('status');
+        s.innerText = m;
+        s.style.opacity = 1;
         setTimeout(() => s.style.opacity = 0, 1500);
     }
+
+    // Ekran döndürme veya boyut değişimi kontrolü
+    window.addEventListener('resize', () => {
+        startLevel(currentLevelIdx);
+    });
 
     window.onload = () => startLevel(0);
 </script>
